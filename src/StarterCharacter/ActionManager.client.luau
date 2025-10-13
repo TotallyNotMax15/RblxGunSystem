@@ -1,6 +1,9 @@
 -- Services
 local CAS = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Event = ReplicatedStorage.GunSystem.remotes.ChangeState
 
 -- Plr variables
 local player = Players.LocalPlayer
@@ -36,14 +39,17 @@ end
 
 function Stand()
     print("Standing")
+    Event:FireServer("Stand")
 end
 
 function Crouch()
     print("Crouching")
+    Event:FireServer("Crouch")
 end
 
 function Prone()
     print("Proning")
+    Event:FireServer("Prone")
 end
 
 CAS:BindAction("Stand", handleActions, true, Enum.KeyCode.X)
