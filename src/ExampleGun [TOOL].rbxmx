@@ -1,0 +1,400 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Tool" referent="RBX2487D1C91FA945E989B2C6CB6A42C274">
+		<Properties>
+			<bool name="CanBeDropped">true</bool>
+			<bool name="Enabled">true</bool>
+			<CoordinateFrame name="Grip">
+				<X>0</X>
+				<Y>0</Y>
+				<Z>0</Z>
+				<R00>1</R00>
+				<R01>0</R01>
+				<R02>0</R02>
+				<R10>0</R10>
+				<R11>1</R11>
+				<R12>0</R12>
+				<R20>0</R20>
+				<R21>0</R21>
+				<R22>1</R22>
+			</CoordinateFrame>
+			<bool name="ManualActivationOnly">false</bool>
+			<bool name="RequiresHandle">true</bool>
+			<string name="ToolTip"></string>
+			<Content name="TextureId"><null></null></Content>
+			<token name="LevelOfDetail">0</token>
+			<CoordinateFrame name="ModelMeshCFrame">
+				<X>0</X>
+				<Y>0</Y>
+				<Z>0</Z>
+				<R00>1</R00>
+				<R01>0</R01>
+				<R02>0</R02>
+				<R10>0</R10>
+				<R11>1</R11>
+				<R12>0</R12>
+				<R20>0</R20>
+				<R21>0</R21>
+				<R22>1</R22>
+			</CoordinateFrame>
+			<SharedString name="ModelMeshData">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>
+			<Vector3 name="ModelMeshSize">
+				<X>0</X>
+				<Y>0</Y>
+				<Z>0</Z>
+			</Vector3>
+			<token name="ModelStreamingMode">0</token>
+			<bool name="NeedsPivotMigration">false</bool>
+			<Ref name="PrimaryPart">null</Ref>
+			<float name="ScaleFactor">1</float>
+			<OptionalCoordinateFrame name="WorldPivotData"></OptionalCoordinateFrame>
+			<BinaryString name="AttributesSerialize"></BinaryString>
+			<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+			<bool name="DefinesCapabilities">false</bool>
+			<string name="Name">Five-Seven</string>
+			<int64 name="SourceAssetId">-1</int64>
+			<BinaryString name="Tags"></BinaryString>
+		</Properties>
+		<Item class="LocalScript" referent="RBXE762C06E44F349CFBA7C27441ECD9B33">
+			<Properties>
+				<ProtectedString name="Source"><![CDATA[local GunName = script.Parent.Name
+local aimTimeFirstPerson = 0.45
+local aimTimeThirdPerson = 0.15
+local lockFirstPerson = false
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+
+local tool = script.Parent
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+
+local Camera = workspace.CurrentCamera
+local head = char:WaitForChild("Head")
+
+local GunSystemFolder = ReplicatedStorage.GunSystem
+local ViewmodelFolder = GunSystemFolder.Viewmodels:WaitForChild(GunName)
+
+local ViewModelRemote = GunSystemFolder.Viewmodels.ViewModelRemote
+local ViewModelThirdPerson = ViewmodelFolder.ViewModelThirdPerson
+local ViewModel
+local ViewModelTPS
+
+local equipped = false
+local aiming = false
+
+local swayAmount = 1
+local swayCF = CFrame.new()
+local lastCameraCF = CFrame.new()
+local aimCF = CFrame.new(0,0,0)
+
+local zoomTween
+local zooming = false
+local moveTween
+local moving = false
+
+local function isFirstPerson()
+	if head.LocalTransparencyModifier == 1 or (head.CFrame.Position - Camera.CFrame.Position).Magnitude < 1 then
+		return true
+	else
+		return false
+	end
+end
+
+local function MatchArmsToPlayer(viewModel, player)
+	local humanoid = char:FindFirstChildOfClass('Humanoid')
+	if not humanoid then return end
+	
+	local RightArmColor = humanoid:GetAppliedDescription().RightArmColor
+	local LeftArmColor = humanoid:GetAppliedDescription().LeftArmColor
+	local shirt = char:FindFirstChild("Shirt")
+	local ViewmodelShirt = viewModel:FindFirstChild("Shirt")
+	
+	if viewModel:FindFirstChild("Right Arm") then
+		viewModel["Right Arm"].Color = RightArmColor
+	end
+	
+	if viewModel:FindFirstChild("Left Arm") then
+		viewModel["Left Arm"].Color = LeftArmColor
+	end
+	
+	if shirt and ViewmodelShirt then
+		ViewmodelShirt.ShirtTemplate = shirt.ShirtTemplate
+	end
+end
+
+local function setArmsTransparency(player,transparency)
+	local character = player.Character
+	if not character then return end
+	local RightArm = character:FindFirstChild("Right Arm")
+	local LeftArm = character:FindFirstChild("Left Arm")
+	
+	if RightArm.Transparency then
+		RightArm.Transparency = transparency
+	end
+	if LeftArm.Transparency then
+		LeftArm.Transparency = transparency
+	end
+end
+
+local function CreateFPViewmodel()
+	local newViewmodel: Instance = ViewmodelFolder.ViewModel:Clone()
+	newViewmodel.Name = GunName.."_Viewmodel"
+	newViewmodel.Parent = Camera
+	MatchArmsToPlayer(newViewmodel, player)
+end
+
+local function CreateLocalTPViewmodel()
+	if not ViewModelTPS and equipped then
+		ViewModelTPS = ViewModelThirdPerson:Clone()
+		ViewModelTPS.Parent = player.Character 
+		ViewModelTPS.Name = GunName.."_ThirdPersonLocalViewmodel"
+		MatchArmsToPlayer(ViewModelTPS, player)
+	end
+end
+
+local function TransitionViewmodelToThirdPerson()
+	if Camera:FindFirstChild(GunName.."_Viewmodel") then
+		Camera:FindFirstChild(GunName.."_Viewmodel"):Destroy()
+	end
+	
+	CreateLocalTPViewmodel()
+	
+	if player.Character:FindFirstChild(GunName.."_TPServerViewmodel") then
+		player.Character:FindFirstChild(GunName.."_TPServerViewmodel"):Destroy()
+	end
+end
+
+local function ZoomCamera(targetFOV, duration)
+	if zoomTween then
+		zoomTween:Cancel()
+	end
+	zooming = true
+	
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Sine,Enum.EasingDirection.InOut)
+	local zoomGoal = {FieldOfView = targetFOV}
+	
+	zoomTween = TS:Create(Camera,tweenInfo,zoomGoal)
+	zoomTween:Play()
+	
+	zoomTween.Completed:Connect(function()
+		zooming = false
+	end)
+end
+
+local function handleAiming(key)
+	if key.UserInputType == Enum.UserInputType.MouseButton2 then
+		aiming = true
+		local viewModel = Camera:FindFirstChild(GunName.."_Viewmodel")
+
+		if not isFirstPerson() and equipped then
+			ZoomCamera(45, aimTimeThirdPerson)
+		end
+	end
+end
+
+UIS.InputBegan:Connect(function(key)
+	if not equipped then return end
+	handleAiming(key)
+end)
+
+UIS.InputEnded:Connect(function(key)
+	if not equipped then return end
+	if key.UserInputType == Enum.UserInputType.MouseButton2 then
+		aiming = false
+		local viewModel = Camera:FindFirstChild(GunName.."_Viewmodel")
+		
+		if not isFirstPerson() and equipped then
+			ZoomCamera(70, aimTimeThirdPerson)
+		end
+	end
+end)
+
+tool.Equipped:Connect(function()
+	equipped = true
+	ViewModelRemote:FireServer(ViewModelThirdPerson,equipped,GunName)
+	setArmsTransparency(player,1)
+end)
+
+tool.Unequipped:Connect(function()
+	setArmsTransparency(player,0)
+	equipped = false
+	ZoomCamera(70,aimTimeThirdPerson)
+	ViewModelRemote:FireServer(ViewModelThirdPerson,equipped,GunName)
+	if Camera:FindFirstChild(GunName.."_Viewmodel") then
+		Camera:FindFirstChild(GunName.."_Viewmodel"):Destroy()
+	end
+	
+	if player.Character:FindFirstChild(GunName.."_ThirdPersonLocalViewmodel") then
+		ViewModelTPS = nil
+		player.Character:FindFirstChild(GunName.."_ThirdPersonLocalViewmodel"):Destroy()
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if player.Character.Humanoid.Health <= 0 then
+		equipped = false
+		return
+	end
+	
+	if not equipped then return end
+	
+	if isFirstPerson() then
+		if Camera.FieldOfView ~= 70 then
+			ZoomCamera(70,aimTimeThirdPerson)
+		end
+		local FPViewmodel = Camera:FindFirstChild(GunName.."_Viewmodel")
+		local TPSViewmodel = player.Character:FindFirstChild(GunName.."_ThirdPersonLocalViewmodel")
+		
+		if not FPViewmodel then
+			CreateFPViewmodel()
+		else
+			if TPSViewmodel then
+				ViewModelTPS = nil
+				TPSViewmodel:Destroy()
+			end
+			
+			local rotation = Camera.CFrame:ToObjectSpace(lastCameraCF)
+			local X,Y = rotation:ToOrientation()
+			local swayCF = swayCF:Lerp(CFrame.Angles(math.sin(X) * swayAmount, math.sin(Y) * swayAmount, 0), 0.1)
+			lastCameraCF = Camera.CFrame
+			
+			local PrimaryPart = FPViewmodel.PrimaryPart
+			local aimPart = FPViewmodel:FindFirstChild("AimPart")
+			
+			if aiming and aimPart and PrimaryPart then
+				local offset = aimPart.CFrame:ToObjectSpace(PrimaryPart.CFrame)
+				aimCF = aimCF:Lerp(offset, .1)
+			else
+				aimCF = aimCF:Lerp(CFrame.new(), .1)	
+			end
+			
+			FPViewmodel:SetPrimaryPartCFrame(Camera.CFrame * swayCF * aimCF)
+		end
+	else
+		TransitionViewmodelToThirdPerson()
+		if player.Character and ViewModelTPS then
+			ViewModelTPS:PivotTo(player.Character.Head.CFrame)
+		end
+	end
+end)]]></ProtectedString>
+				<bool name="Disabled">false</bool>
+				<Content name="LinkedSource"><null></null></Content>
+				<token name="RunContext">0</token>
+				<string name="ScriptGuid">{FA0BD260-95F5-4669-A063-8C59C09D3A4A}</string>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">ViewModelHandler</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+		</Item>
+		<Item class="Part" referent="RBX1CA793AF40FF4F038543456006539B2C">
+			<Properties>
+				<token name="shape">1</token>
+				<token name="formFactorRaw">1</token>
+				<bool name="Anchored">false</bool>
+				<bool name="AudioCanCollide">true</bool>
+				<float name="BackParamA">-0.5</float>
+				<float name="BackParamB">0.5</float>
+				<token name="BackSurface">0</token>
+				<token name="BackSurfaceInput">0</token>
+				<float name="BottomParamA">-0.5</float>
+				<float name="BottomParamB">0.5</float>
+				<token name="BottomSurface">0</token>
+				<token name="BottomSurfaceInput">0</token>
+				<CoordinateFrame name="CFrame">
+					<X>0</X>
+					<Y>0</Y>
+					<Z>0</Z>
+					<R00>1</R00>
+					<R01>0</R01>
+					<R02>0</R02>
+					<R10>0</R10>
+					<R11>1</R11>
+					<R12>0</R12>
+					<R20>0</R20>
+					<R21>0</R21>
+					<R22>1</R22>
+				</CoordinateFrame>
+				<bool name="CanCollide">false</bool>
+				<bool name="CanQuery">true</bool>
+				<bool name="CanTouch">true</bool>
+				<bool name="CastShadow">true</bool>
+				<string name="CollisionGroup">Default</string>
+				<int name="CollisionGroupId">0</int>
+				<Color3uint8 name="Color3uint8">4288914085</Color3uint8>
+				<PhysicalProperties name="CustomPhysicalProperties">
+					<CustomPhysics>false</CustomPhysics>
+				</PhysicalProperties>
+				<bool name="EnableFluidForces">true</bool>
+				<float name="FrontParamA">-0.5</float>
+				<float name="FrontParamB">0.5</float>
+				<token name="FrontSurface">0</token>
+				<token name="FrontSurfaceInput">0</token>
+				<float name="LeftParamA">-0.5</float>
+				<float name="LeftParamB">0.5</float>
+				<token name="LeftSurface">0</token>
+				<token name="LeftSurfaceInput">0</token>
+				<bool name="Locked">false</bool>
+				<bool name="Massless">false</bool>
+				<token name="Material">256</token>
+				<string name="MaterialVariantSerialized"></string>
+				<CoordinateFrame name="PivotOffset">
+					<X>0</X>
+					<Y>0</Y>
+					<Z>0</Z>
+					<R00>1</R00>
+					<R01>0</R01>
+					<R02>0</R02>
+					<R10>0</R10>
+					<R11>1</R11>
+					<R12>0</R12>
+					<R20>0</R20>
+					<R21>0</R21>
+					<R22>1</R22>
+				</CoordinateFrame>
+				<float name="Reflectance">0</float>
+				<float name="RightParamA">-0.5</float>
+				<float name="RightParamB">0.5</float>
+				<token name="RightSurface">0</token>
+				<token name="RightSurfaceInput">0</token>
+				<int name="RootPriority">0</int>
+				<Vector3 name="RotVelocity">
+					<X>0</X>
+					<Y>0</Y>
+					<Z>0</Z>
+				</Vector3>
+				<float name="TopParamA">-0.5</float>
+				<float name="TopParamB">0.5</float>
+				<token name="TopSurface">0</token>
+				<token name="TopSurfaceInput">0</token>
+				<float name="Transparency">1</float>
+				<Vector3 name="Velocity">
+					<X>0</X>
+					<Y>0</Y>
+					<Z>0</Z>
+				</Vector3>
+				<Vector3 name="size">
+					<X>0.5</X>
+					<Y>0.5</Y>
+					<Z>0.5</Z>
+				</Vector3>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">Handle</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+		</Item>
+	</Item>
+	<SharedStrings>
+		<SharedString md5="yuZpQdnvvUBOTYh1jqZ2cA=="></SharedString>
+	</SharedStrings>
+</roblox>
