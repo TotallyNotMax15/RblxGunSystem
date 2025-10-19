@@ -1,15 +1,17 @@
 local Anims = {
     Idle = {
-        Crouch = "84514960332809",
+        Crouch = "http://www.roblox.com/asset/?id=110050689889236",
+        Stand = "http://www.roblox.com/asset/?id=180435571",
     },
     Move = {
-        Crouch = "99283376307644",
+        Crouch = "http://www.roblox.com/asset/?id=118799512467717",
+        Stand = "http://www.roblox.com/asset/?id=180426354",
     },
     UpState = {
-        Crouch = "128359418805559",
+        Crouch = "http://www.roblox.com/asset/?id=128359418805559",
     },
     DownState = {
-        Crouch = "132703441448837",
+        Crouch = "http://www.roblox.com/asset/?id=132703441448837",
     }
 }
 
